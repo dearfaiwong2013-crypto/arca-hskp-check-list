@@ -10,6 +10,9 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- SheetJS XLSX Library for Excel Export -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- JSZip Library for Folder Packaging Download -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    
     <script>
         // ==========================================
         // 🛠️ 雲端同步設定 (JSONbin.io)
@@ -39,9 +42,9 @@
         
         @media print {
             @page { size: A4 portrait; margin: 3mm; }
-            body * { visibility: hidden; }
-            #printArea, #printArea * { visibility: visible; }
-            #printArea { position: absolute; left: 0; top: 0; width: 100%; background: white; font-size: 9px; }
+            body * { visibility: hidden !important; }
+            #printArea, #printArea * { visibility: visible !important; }
+            #printArea { position: absolute; left: 0; top: 0; width: 100%; display: block !important; background: white; font-size: 8px; }
             .no-print { display: none !important; }
         }
         
@@ -51,7 +54,7 @@
 </head>
 <body class="h-full font-sans text-slate-800 antialiased flex flex-col">
 
-    <!-- 頂部導航欄 Navbar (圖二風格) -->
+    <!-- 頂部導航欄 Navbar -->
     <header class="bg-slate-900 text-white shadow-md sticky top-0 z-30 no-print">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 flex flex-col space-y-2">
             <div class="flex items-center justify-between">
@@ -76,13 +79,16 @@
                     <button type="button" onclick="loadFromCloud()" class="px-2.5 py-1.5 text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg shadow flex items-center transition">
                         <i class="fa-solid fa-rotate mr-1"></i> 同步
                     </button>
+                    <button type="button" onclick="downloadProjectZip()" class="px-2.5 py-1.5 text-xs font-semibold bg-amber-600 hover:bg-amber-500 text-white rounded-lg shadow flex items-center transition">
+                        <i class="fa-solid fa-file-zipper mr-1"></i> 打包下載 ZIP
+                    </button>
                     <button type="button" onclick="exportToExcel()" class="px-2.5 py-1.5 text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg shadow flex items-center transition">
                         <i class="fa-solid fa-file-excel mr-1"></i> Excel
                     </button>
                 </div>
             </div>
 
-            <!-- 圖二按鈕組 -->
+            <!-- 功能按鈕組 -->
             <div class="flex items-center space-x-1.5 pt-1 border-t border-slate-800">
                 <button type="button" onclick="openInspectorSettingsModal()" class="flex-1 sm:flex-none px-3 py-1.5 text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 flex items-center justify-center transition">
                     <i class="fa-solid fa-users-gear mr-1 text-amber-400"></i> 設定人員
@@ -167,16 +173,52 @@
             </div>
         </div>
 
-        <!-- 樓層矩陣地圖 Grid Display (完全還原圖二樣式) -->
+        <!-- 樓層矩陣地圖 Grid Display -->
         <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex-1 flex flex-col no-print">
             <div class="bg-slate-900 px-4 py-3 text-white font-semibold text-sm flex items-center justify-between">
                 <span class="flex items-center"><i class="fa-solid fa-border-all text-brand-400 mr-2"></i> 客房檢驗矩陣地圖 (187 間客房全覽)</span>
             </div>
             
             <div class="p-2 sm:p-4 overflow-x-auto flex-1">
-                <div id="matrixContainer" class="space-y-2 min-w-[700px]">
-                    <!-- 由 JS 動態渲染圖二精美卡片 -->
+                <div id="matrixContainer" class="space-y-2 min-w-[700px]"></div>
+            </div>
+        </div>
+
+        <!-- 直向 A4 列印專用區域 Print Layout -->
+        <div id="printArea" class="hidden print:block p-1 bg-white text-black font-sans">
+            <div class="border border-black p-2">
+                <div class="flex justify-between items-start mb-1 border-b border-black pb-1">
+                    <div>
+                        <h1 class="text-sm font-black tracking-widest uppercase">the Arca 雅格酒店</h1>
+                        <p class="text-[8px] font-bold text-slate-700">Housekeeping Floor Inspection Matrix</p>
+                    </div>
+                    <div class="text-right text-[8px] font-medium">
+                        <p><strong>檢查日期:</strong> <span id="printDate"></span></p>
+                        <p><strong>預設檢查員:</strong> <span id="printInspector"></span></p>
+                        <p><strong>主題:</strong> <span id="printTheme"></span></p>
+                    </div>
                 </div>
+
+                <div class="grid grid-cols-4 gap-1 text-center text-[8px] border border-black p-0.5 mb-1 bg-slate-100 font-bold">
+                    <div>總客房數: <span id="printTotalRooms">187</span></div>
+                    <div>已檢查完成: <span id="printDone">0</span></div>
+                    <div>完成率 %: <span id="printDonePct">0%</span></div>
+                    <div>瑕疵數 (✕): <span id="printDefects" class="text-rose-700">0</span></div>
+                </div>
+
+                <table class="w-full text-[8px] thick-border-table text-center border-collapse">
+                    <thead>
+                        <tr class="bg-slate-200 font-bold border-b border-black">
+                            <th class="p-0.5 w-6 border-r border-black">樓層</th>
+                            <th class="p-0.5">.01</th><th class="p-0.5">.02</th><th class="p-0.5">.03</th>
+                            <th class="p-0.5">.04</th><th class="p-0.5">.05</th><th class="p-0.5">.06</th>
+                            <th class="p-0.5">.07</th><th class="p-0.5">.08</th><th class="p-0.5">.09</th>
+                            <th class="p-0.5">.10</th><th class="p-0.5">.11</th>
+                            <th class="p-0.5 w-6 border-l border-black">樓層</th>
+                        </tr>
+                    </thead>
+                    <tbody id="printTableBody"></tbody>
+                </table>
             </div>
         </div>
 
@@ -191,7 +233,7 @@
                     <span id="modalRoomBadge" class="bg-brand-400 text-slate-950 font-black text-2xl px-3 py-1 rounded-xl shadow">1701</span>
                     <div>
                         <h3 class="text-base font-bold">客房檢驗紀錄</h3>
-                        <p class="text-xs text-slate-400">更新狀態與備註，自動同步至雲端</p>
+                        <p class="text-xs text-slate-400">記錄檢查人員、瑕疵備註與現場拍照</p>
                     </div>
                 </div>
                 <button type="button" onclick="closeRoomModal()" class="text-slate-400 hover:text-white text-xl">
@@ -225,8 +267,36 @@
 
                 <div>
                     <label class="block font-bold text-slate-800 mb-1">檢查備註說明 (Remarks)</label>
-                    <textarea id="modalNotes" rows="3" placeholder="例如：床單有污漬、鏡面有水漬..." 
+                    <textarea id="modalNotes" rows="2" placeholder="例如：床單有污漬、鏡面有水漬..." 
                         class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:outline-none"></textarea>
+                </div>
+
+                <!-- 現場拍照與照片上傳區 -->
+                <div class="border-t border-slate-200 pt-3">
+                    <h4 class="font-bold text-slate-800 text-xs flex items-center mb-2">
+                        <i class="fa-solid fa-camera text-indigo-500 mr-1.5"></i> 現場相片記錄
+                    </h4>
+                    <div class="grid grid-cols-2 gap-2 mb-2">
+                        <div class="border-2 border-dashed border-indigo-300 hover:border-indigo-500 rounded-xl p-2 text-center cursor-pointer bg-indigo-50/50 relative flex items-center justify-center space-x-2">
+                            <input type="file" accept="image/*" capture="environment" onchange="handlePhotoUpload(event)" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                            <i class="fa-solid fa-camera-retro text-lg text-indigo-600"></i>
+                            <div class="text-left">
+                                <span class="block text-xs font-bold text-indigo-900">現場直接拍照</span>
+                                <span class="block text-[8px] text-indigo-600">手機相機上傳</span>
+                            </div>
+                        </div>
+
+                        <div class="border-2 border-dashed border-slate-300 hover:border-brand-400 rounded-xl p-2 text-center cursor-pointer bg-slate-50 relative flex items-center justify-center space-x-2">
+                            <input type="file" multiple accept="image/*" onchange="handlePhotoUpload(event)" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                            <i class="fa-solid fa-folder-arrow-up text-lg text-slate-500"></i>
+                            <div class="text-left">
+                                <span class="block text-xs font-bold text-slate-700">上傳相冊照片</span>
+                                <span class="block text-[8px] text-slate-400">選取相片圖檔</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="photoPreviewContainer" class="grid grid-cols-4 gap-2 mt-2"></div>
                 </div>
             </div>
 
@@ -288,7 +358,7 @@
             "黃麗萍 Nancy (房務經理)", "何家輝 Kelvin (品質專員)"
         ];
 
-        let tempModalState = { overallStatus: 'PENDING' };
+        let tempModalState = { overallStatus: 'PENDING', photos: [] };
         let projectConfig = {
             theme: '2026Q4_深度清潔檢查',
             inspector: '陳大文 Alex (房務主管)',
@@ -306,6 +376,13 @@
             document.getElementById('projectTheme').value = projectConfig.theme;
             document.getElementById('inspectionDate').value = projectConfig.date;
             populateInspectorSelect();
+        }
+
+        function saveProjectSettings() {
+            projectConfig.theme = document.getElementById('projectTheme').value.trim() || 'General_Inspection';
+            projectConfig.inspector = document.getElementById('inspectorSelect').value;
+            projectConfig.date = document.getElementById('inspectionDate').value || new Date().toISOString().split('T')[0];
+            saveToCloud();
         }
 
         function populateInspectorSelect() {
@@ -337,7 +414,15 @@
                     headers: { 'X-Master-Key': JSONBIN_KEY }
                 });
                 const result = await response.json();
-                roomDataStore = result.record.rooms || {};
+                
+                if (result.record) {
+                    roomDataStore = result.record.rooms || {};
+                    if (result.record.config) {
+                        projectConfig = { ...projectConfig, ...result.record.config };
+                        initProjectFields();
+                    }
+                }
+                
                 renderFloorMatrix();
                 updateSyncStatus('fa-check-circle text-emerald-400', '雲端連線正常');
             } catch (e) {
@@ -378,7 +463,6 @@
             });
         }
 
-        // 完全按照「圖二」繪製精美的卡片版面
         function renderFloorMatrix() {
             const container = document.getElementById('matrixContainer');
             const selectedFloor = document.getElementById('floorFilter').value;
@@ -427,6 +511,7 @@
                     }
 
                     let inspectorShort = roomData.inspector ? roomData.inspector.split(' ')[0] : '';
+                    let hasPhotos = roomData.photos && roomData.photos.length > 0;
 
                     roomCard.className = `p-1.5 rounded-xl border text-left flex flex-col justify-between h-14 transition duration-150 ${bgClasses}`;
                     roomCard.innerHTML = `
@@ -437,8 +522,9 @@
                         <div class="text-[9px] text-indigo-700 font-semibold truncate leading-none mt-1">
                             ${inspectorShort || '<span class="text-slate-400 font-normal">未指定</span>'}
                         </div>
-                        <div class="text-[8px] text-slate-500 font-mono leading-none mt-0.5">
-                            ${roomData.date ? roomData.date.substring(5) : ''}
+                        <div class="flex items-center justify-between text-[8px] text-slate-500 font-mono leading-none mt-0.5">
+                            <span>${roomData.date ? roomData.date.substring(5) : ''}</span>
+                            <span>${hasPhotos ? '<i class="fa-solid fa-camera text-indigo-500"></i>' : ''}</span>
                         </div>
                     `;
 
@@ -475,16 +561,23 @@
                 overallStatus: 'PENDING',
                 notes: '',
                 date: new Date().toISOString().split('T')[0],
-                inspector: projectConfig.inspector
+                inspector: projectConfig.inspector,
+                photos: []
             };
 
-            tempModalState = { overallStatus: data.overallStatus || 'PENDING' };
+            tempModalState = { 
+                overallStatus: data.overallStatus || 'PENDING',
+                photos: data.photos ? [...data.photos] : []
+            };
 
             document.getElementById('modalRoomBadge').textContent = roomNo;
             document.getElementById('modalNotes').value = data.notes || '';
+            
+            // 固定帶入選擇的人員
             document.getElementById('modalInspectorSelect').value = data.inspector || projectConfig.inspector;
 
             updateModalStatusButtons(tempModalState.overallStatus);
+            renderPhotoPreviews(tempModalState.photos);
             document.getElementById('roomModal').classList.remove('hidden');
         }
 
@@ -513,6 +606,75 @@
                 (status === 'PENDING' ? "bg-slate-700 border-slate-700 text-white shadow" : "bg-slate-50 border-slate-200 text-slate-700");
         }
 
+        function compressImage(file, callback) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = new Image();
+                img.onload = function() {
+                    const canvas = document.createElement('canvas');
+                    let width = img.width, height = img.height;
+                    const maxDim = 800;
+                    if (width > maxDim || height > maxDim) {
+                        if (width > height) { height = Math.round((height * maxDim) / width); width = maxDim; }
+                        else { width = Math.round((width * maxDim) / height); height = maxDim; }
+                    }
+                    canvas.width = width; canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    callback(canvas.toDataURL('image/jpeg', 0.6));
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function handlePhotoUpload(e) {
+            const files = e.target.files;
+            if (!files || !files.length || !currentEditingRoom) return;
+
+            Array.from(files).forEach(file => {
+                compressImage(file, function(compressedBase64) {
+                    tempModalState.photos.push({
+                        id: Date.now() + Math.random().toString(36).substring(2, 5),
+                        filename: file.name || `photo_${Date.now()}.jpg`,
+                        dataUrl: compressedBase64
+                    });
+                    renderPhotoPreviews(tempModalState.photos);
+                });
+            });
+            showToast('相片已完成上傳');
+        }
+
+        function renderPhotoPreviews(photos) {
+            const container = document.getElementById('photoPreviewContainer');
+            container.innerHTML = '';
+
+            if (!photos || !photos.length) {
+                container.innerHTML = `<div class="col-span-full text-center text-xs text-slate-400 py-2">尚未拍攝或上傳相片</div>`;
+                return;
+            }
+
+            photos.forEach((p, idx) => {
+                const card = document.createElement('div');
+                card.className = 'relative group rounded-lg overflow-hidden border border-slate-200 bg-slate-100 aspect-square shadow-sm';
+                card.innerHTML = `
+                    <img src="${p.dataUrl}" class="w-full h-full object-cover">
+                    <div class="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition flex flex-col justify-between p-1 text-white text-[8px]">
+                        <span class="truncate font-mono">${p.filename}</span>
+                        <button type="button" onclick="removePhoto(${idx})" class="bg-rose-600 hover:bg-rose-700 text-white p-1 rounded self-end">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function removePhoto(idx) {
+            tempModalState.photos.splice(idx, 1);
+            renderPhotoPreviews(tempModalState.photos);
+        }
+
         async function saveRoomData() {
             if (!currentEditingRoom) return;
 
@@ -523,7 +685,8 @@
                 overallStatus: tempModalState.overallStatus,
                 notes: notes,
                 date: new Date().toISOString().split('T')[0],
-                inspector: inspectorVal
+                inspector: inspectorVal,
+                photos: [...tempModalState.photos]
             };
 
             closeRoomModal();
@@ -554,6 +717,9 @@
                 if (val) newList.push(val);
             }
             projectConfig.inspectorsList = newList;
+            if (!newList.includes(projectConfig.inspector)) {
+                projectConfig.inspector = newList[0];
+            }
             populateInspectorSelect();
             closeInspectorSettingsModal();
             saveToCloud();
@@ -561,21 +727,179 @@
 
         function openFolderViewerModal() {
             const treeContainer = document.getElementById('folderTreeContent');
-            treeContainer.innerHTML = '<div class="text-slate-500">目前雲端數據正常運作中</div>';
+            const theme = projectConfig.theme;
+
+            let html = `<div class="font-bold mb-2 text-amber-600"><i class="fa-solid fa-folder-open mr-2"></i> ${theme} \\</div>`;
+            let hasPhotos = false;
+
+            Object.keys(roomDataStore).forEach(roomNo => {
+                const photos = roomDataStore[roomNo].photos || [];
+                if (photos.length > 0) {
+                    hasPhotos = true;
+                    html += `
+                        <div class="ml-4 my-1.5">
+                            <div class="font-bold text-slate-800"><i class="fa-solid fa-door-closed text-indigo-500 mr-1.5"></i> Room_${roomNo} (${photos.length} 張照片)</div>
+                            <div class="ml-5 grid grid-cols-2 gap-1.5 mt-1">
+                    `;
+                    photos.forEach(p => {
+                        html += `
+                            <div class="flex items-center bg-slate-50 p-1 border rounded">
+                                <img src="${p.dataUrl}" class="w-7 h-7 object-cover rounded mr-2">
+                                <span class="truncate text-[10px]">${p.filename}</span>
+                            </div>
+                        `;
+                    });
+                    html += `</div></div>`;
+                }
+            });
+
+            if (!hasPhotos) html += `<div class="text-slate-400 italic ml-4">（目前尚無房間上傳照片）</div>`;
+            treeContainer.innerHTML = html;
             document.getElementById('folderModal').classList.remove('hidden');
         }
 
         function closeFolderModal() { document.getElementById('folderModal').classList.add('hidden'); }
 
+        // 打包電腦端下載：專案名稱資料夾/房間號碼資料夾/照片及說明
+        async function downloadProjectZip() {
+            const zip = new JSZip();
+            const projectFolderName = projectConfig.theme.replace(/[\/\\:*?"<>|]/g, '_') || 'Housekeeping_Project';
+            const projectFolder = zip.folder(projectFolderName);
+
+            let photoCount = 0;
+
+            Object.keys(roomDataStore).forEach(roomNo => {
+                const room = roomDataStore[roomNo];
+                if (room.overallStatus !== 'PENDING' || (room.photos && room.photos.length > 0) || room.notes) {
+                    const roomFolder = projectFolder.folder(`Room_${roomNo}`);
+                    
+                    // 寫入房間文字報告
+                    const reportText = `房間號碼: ${roomNo}\n檢查狀態: ${room.overallStatus}\n檢查人員: ${room.inspector || '未指定'}\n檢查日期: ${room.date || ''}\n備註說明: ${room.notes || '無'}\n`;
+                    roomFolder.file("Inspection_Notes.txt", reportText);
+
+                    // 寫入房間照片
+                    if (room.photos && room.photos.length > 0) {
+                        room.photos.forEach((p, idx) => {
+                            if (p.dataUrl && p.dataUrl.includes('base64,')) {
+                                const base64Data = p.dataUrl.split('base64,')[1];
+                                const fileName = p.filename || `Photo_${idx + 1}.jpg`;
+                                roomFolder.file(fileName, base64Data, { base64: true });
+                                photoCount++;
+                            }
+                        });
+                    }
+                }
+            });
+
+            showToast("正在打包 ZIP 壓縮包，請稍候...");
+            const blob = await zip.generateAsync({ type: "blob" });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `${projectFolderName}_Export.zip`;
+            link.click();
+            showToast(`✅ ZIP 打包下載成功！包含 ${photoCount} 張相片`);
+        }
+
         function exportToExcel() {
             const wb = XLSX.utils.book_new();
-            const ws = XLSX.utils.json_to_sheet(Object.keys(roomDataStore).map(k => ({ Room: k, ...roomDataStore[k] })));
+            const wsData = [
+                ["the Arca 雅格酒店 - 客房檢查矩陣表"],
+                ["專案主題:", projectConfig.theme, "", "基準日期:", projectConfig.date],
+                ["預設人員:", projectConfig.inspector],
+                []
+            ];
+
+            wsData.push(["Room", "Status", "Inspector", "Date", "Notes", "Photos Count"]);
+
+            Object.keys(roomDataStore).sort().forEach(k => {
+                const r = roomDataStore[k];
+                wsData.push([
+                    k, 
+                    r.overallStatus === 'PASS' ? '合格 (✓)' : r.overallStatus === 'DEFECT' ? '瑕疵 (✕)' : '未檢查',
+                    r.inspector || '',
+                    r.date || '',
+                    r.notes || '',
+                    r.photos ? r.photos.length : 0
+                ]);
+            });
+
+            const ws = XLSX.utils.aoa_to_sheet(wsData);
             XLSX.utils.book_append_sheet(wb, ws, "Inspection Matrix");
-            XLSX.writeFile(wb, `theArca_Inspection.xlsx`);
+            XLSX.writeFile(wb, `${projectConfig.theme}_Report.xlsx`);
             showToast("Excel (.xlsx) 報表匯出成功！");
         }
 
-        function triggerPrint() { window.print(); }
+        // 修正列印功能，確保數據正確渲染進列印 DOM
+        function triggerPrint() {
+            document.getElementById('printDate').textContent = projectConfig.date;
+            document.getElementById('printInspector').textContent = projectConfig.inspector;
+            document.getElementById('printTheme').textContent = projectConfig.theme;
+
+            let totalDone = 0, totalDefects = 0;
+            const totalRooms = FLOORS.length * ROOM_UNITS.length;
+
+            Object.values(roomDataStore).forEach(r => {
+                if (r.overallStatus === 'PASS') totalDone++;
+                if (r.overallStatus === 'DEFECT') { totalDone++; totalDefects++; }
+            });
+
+            document.getElementById('printDone').textContent = totalDone;
+            document.getElementById('printDonePct').textContent = Math.round((totalDone / totalRooms) * 100) + '%';
+            document.getElementById('printDefects').textContent = totalDefects;
+
+            const tbody = document.getElementById('printTableBody');
+            tbody.innerHTML = '';
+
+            FLOORS.forEach(floor => {
+                const trHeader = document.createElement('tr');
+                trHeader.className = "bg-amber-100 font-bold border-t border-black";
+
+                let rowHtml = `<td rowspan="2" class="border border-black p-0.5 font-bold bg-slate-200 text-[8px] align-middle">${floor}F</td>`;
+
+                ROOM_UNITS.forEach(u => {
+                    rowHtml += `<td class="border border-black p-0.5 font-bold text-center bg-amber-100 text-[8px]">${u}</td>`;
+                });
+
+                rowHtml += `<td rowspan="2" class="border border-black p-0.5 font-bold bg-slate-200 text-[8px] align-middle">${floor}F</td>`;
+                trHeader.innerHTML = rowHtml;
+                tbody.appendChild(trHeader);
+
+                const trStatus = document.createElement('tr');
+                trStatus.className = "border-b border-black";
+
+                let sHtml = '';
+                ROOM_UNITS.forEach(u => {
+                    const unitStr = u < 10 ? `0${u}` : `${u}`;
+                    const roomNo = `${floor}${unitStr}`;
+                    const data = roomDataStore[roomNo] || {};
+
+                    let mark = '';
+                    let colorClass = '';
+                    if (data.overallStatus === 'PASS') {
+                        mark = '✓';
+                        colorClass = 'text-emerald-700 font-black';
+                    } else if (data.overallStatus === 'DEFECT') {
+                        mark = '✕';
+                        colorClass = 'text-rose-600 font-black';
+                    }
+
+                    let inspShort = data.inspector ? data.inspector.split(' ')[0] : '';
+
+                    sHtml += `
+                        <td class="border border-black p-0.5 h-6 text-center align-middle">
+                            <div class="leading-none text-[10px] ${colorClass}">${mark}</div>
+                            <div class="text-[5.5px] text-indigo-800 font-bold leading-tight mt-0.5 truncate">${inspShort}</div>
+                            <div class="text-[5px] text-slate-500 font-mono leading-tight">${data.date ? data.date.substring(5) : ''}</div>
+                        </td>
+                    `;
+                });
+
+                trStatus.innerHTML = sHtml;
+                tbody.appendChild(trStatus);
+            });
+
+            window.print();
+        }
 
         function showToast(msg) {
             const toast = document.getElementById('toast');
