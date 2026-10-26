@@ -232,7 +232,7 @@
 
     </div>
 
-    <!-- 密碼驗證彈窗通用 Modal -->
+    <!-- 密碼驗證彈窗 Modal -->
     <div id="passwordModal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4 no-print">
         <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-sm overflow-hidden flex flex-col p-5 space-y-4">
             <div class="text-center space-y-1">
@@ -327,7 +327,7 @@
                 <!-- 現場拍照區 -->
                 <div class="border-t border-slate-200 pt-3">
                     <h4 class="font-bold text-slate-800 text-xs flex items-center mb-2">
-                        <i class="fa-solid fa-camera text-indigo-500 mr-1.5"></i> 現場相片記錄
+                        <i class="fa-solid fa-camera text-indigo-500 mr-1.5"></i> 現場相片記錄 (點擊縮圖可看大圖)
                     </h4>
                     <div class="grid grid-cols-2 gap-2 mb-2">
                         <div class="border-2 border-dashed border-indigo-300 hover:border-indigo-500 rounded-xl p-2 text-center cursor-pointer bg-indigo-50/50 relative flex items-center justify-center space-x-2">
@@ -359,6 +359,24 @@
                     <i class="fa-solid fa-cloud-arrow-up mr-1"></i> 儲存並同步雲端
                 </button>
             </div>
+        </div>
+    </div>
+
+    <!-- 大圖預覽 Lightbox Modal -->
+    <div id="lightboxModal" onclick="closeLightbox(event)" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 hidden flex flex-col items-center justify-center p-4 no-print select-none">
+        <div class="absolute top-4 right-4 flex items-center space-x-3 z-10" onclick="event.stopPropagation()">
+            <a id="lightboxDownloadBtn" href="#" download="photo.jpg" class="w-10 h-10 bg-slate-800/80 hover:bg-slate-700 text-white rounded-full flex items-center justify-center transition border border-slate-600" title="下載照片">
+                <i class="fa-solid fa-download"></i>
+            </a>
+            <button type="button" onclick="closeLightboxForce()" class="w-10 h-10 bg-rose-600/80 hover:bg-rose-500 text-white rounded-full flex items-center justify-center transition border border-rose-400" title="關閉預覽">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+        </div>
+        <div class="max-w-4xl max-h-[80vh] w-full h-full flex items-center justify-center p-2" onclick="event.stopPropagation()">
+            <img id="lightboxImage" src="" class="max-w-full max-h-full object-contain rounded-xl shadow-2xl border border-slate-700/50">
+        </div>
+        <div class="mt-3 bg-slate-900/80 text-slate-200 px-4 py-1.5 rounded-full text-xs font-mono border border-slate-700/60 max-w-md truncate" id="lightboxCaption" onclick="event.stopPropagation()">
+            photo.jpg
         </div>
     </div>
 
@@ -404,7 +422,6 @@
 
         let roomDataStore = {};
         let currentEditingRoom = null;
-        let pendingThemeValue = "";
         let currentActionType = ""; // 'CLEAR_ALL' 或 'CHANGE_THEME'
 
         const defaultInspectors = [
@@ -435,12 +452,9 @@
             populateInspectorSelect();
         }
 
-        // 專案名稱點擊防護
         function requestThemeChangePermission(inputEl) {
-            inputEl.blur(); // 先讓輸入框失去焦點
+            inputEl.blur();
             currentActionType = 'CHANGE_THEME';
-            pendingThemeValue = document.getElementById('projectTheme').value;
-            
             document.getElementById('passwordModalTitle').textContent = "更改專案名稱授權";
             document.getElementById('passwordModalDesc').textContent = "請輸入更改專案名稱的管理密碼";
             document.getElementById('authPasswordInput').value = "";
@@ -574,7 +588,7 @@
         async function saveToCloud() {
             updateSyncStatus('fa-spin fa-spinner', '儲存至雲端...');
             try {
-                await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_ID}`, {
+                const response = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_ID}`, {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json',
@@ -582,11 +596,18 @@
                     },
                     body: JSON.stringify({ rooms: roomDataStore, config: projectConfig })
                 });
+                
+                if (!response.ok) {
+                    throw new Error('伺服器回應錯誤');
+                }
+
                 renderFloorMatrix();
                 updateSyncStatus('fa-check-circle text-emerald-400', '已同步至雲端');
                 showToast('✅ 數據已成功儲存並同步至雲端！');
             } catch (e) {
-                showToast('❌ 儲存失敗，請重試');
+                console.error(e);
+                updateSyncStatus('fa-triangle-exclamation text-amber-400', '同步體積過大');
+                showToast('⚠️ 儲存失敗：相片體積過大或連線中斷，請刪除部分照片後重試');
             }
         }
 
@@ -752,7 +773,7 @@
                 img.onload = function() {
                     const canvas = document.createElement('canvas');
                     let width = img.width, height = img.height;
-                    const maxDim = 800;
+                    const maxDim = 600; 
                     if (width > maxDim || height > maxDim) {
                         if (width > height) { height = Math.round((height * maxDim) / width); width = maxDim; }
                         else { width = Math.round((width * maxDim) / height); height = maxDim; }
@@ -760,7 +781,7 @@
                     canvas.width = width; canvas.height = height;
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0, width, height);
-                    callback(canvas.toDataURL('image/jpeg', 0.6));
+                    callback(canvas.toDataURL('image/jpeg', 0.4));
                 };
                 img.src = e.target.result;
             };
@@ -781,7 +802,7 @@
                     renderPhotoPreviews(tempModalState.photos);
                 });
             });
-            showToast('相片已完成上傳');
+            showToast('相片已完成壓縮上傳');
         }
 
         function renderPhotoPreviews(photos) {
@@ -795,18 +816,46 @@
 
             photos.forEach((p, idx) => {
                 const card = document.createElement('div');
-                card.className = 'relative group rounded-lg overflow-hidden border border-slate-200 bg-slate-100 aspect-square shadow-sm';
+                card.className = 'relative group rounded-lg overflow-hidden border border-slate-200 bg-slate-100 aspect-square shadow-sm cursor-pointer';
                 card.innerHTML = `
-                    <img src="${p.dataUrl}" class="w-full h-full object-cover">
-                    <div class="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition flex flex-col justify-between p-1 text-white text-[8px]">
+                    <img src="${p.dataUrl}" onclick="openLightbox('${p.dataUrl.replace(/'/g, "\\'")}', '${(p.filename || 'Photo').replace(/'/g, "\\'")}')" class="w-full h-full object-cover hover:scale-105 transition duration-200">
+                    <div class="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition flex flex-col justify-between p-1 text-white text-[8px] pointer-events-none">
                         <span class="truncate font-mono">${p.filename}</span>
-                        <button type="button" onclick="removePhoto(${idx})" class="bg-rose-600 hover:bg-rose-700 text-white p-1 rounded self-end">
-                            <i class="fa-solid fa-trash-can"></i>
-                        </button>
+                        <div class="flex justify-between items-center pointer-events-auto">
+                            <span class="bg-indigo-600/80 text-[7px] px-1 rounded"><i class="fa-solid fa-magnifying-glass-plus"></i> 大圖</span>
+                            <button type="button" onclick="event.stopPropagation(); removePhoto(${idx})" class="bg-rose-600 hover:bg-rose-700 text-white p-1 rounded">
+                                <i class="fa-solid fa-trash-can"></i>
+                            </button>
+                        </div>
                     </div>
                 `;
                 container.appendChild(card);
             });
+        }
+
+        // 大圖檢視 (Lightbox) 相關邏輯
+        function openLightbox(dataUrl, caption) {
+            const lightbox = document.getElementById('lightboxModal');
+            const img = document.getElementById('lightboxImage');
+            const captionEl = document.getElementById('lightboxCaption');
+            const downloadBtn = document.getElementById('lightboxDownloadBtn');
+
+            img.src = dataUrl;
+            captionEl.textContent = caption || '相片預覽';
+            downloadBtn.href = dataUrl;
+            downloadBtn.download = caption || 'photo.jpg';
+
+            lightbox.classList.remove('hidden');
+        }
+
+        function closeLightbox(e) {
+            if (e.target.id === 'lightboxModal') {
+                document.getElementById('lightboxModal').classList.add('hidden');
+            }
+        }
+
+        function closeLightboxForce() {
+            document.getElementById('lightboxModal').classList.add('hidden');
         }
 
         function removePhoto(idx) {
@@ -882,9 +931,10 @@
                     `;
                     photos.forEach(p => {
                         html += `
-                            <div class="flex items-center bg-slate-50 p-1 border rounded">
+                            <div onclick="openLightbox('${p.dataUrl.replace(/'/g, "\\'")}', 'Room_${roomNo}_${(p.filename || '').replace(/'/g, "\\'")}')" class="flex items-center bg-slate-50 p-1 border rounded hover:border-indigo-400 cursor-pointer transition">
                                 <img src="${p.dataUrl}" class="w-7 h-7 object-cover rounded mr-2">
-                                <span class="truncate text-[10px]">${p.filename}</span>
+                                <span class="truncate text-[10px] flex-1">${p.filename}</span>
+                                <i class="fa-solid fa-magnifying-glass-plus text-slate-400 text-[10px] mr-1"></i>
                             </div>
                         `;
                     });
