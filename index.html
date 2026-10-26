@@ -80,7 +80,7 @@
                         <i class="fa-solid fa-rotate mr-1"></i> 同步
                     </button>
                     <button type="button" onclick="downloadProjectZip()" class="px-2.5 py-1.5 text-xs font-semibold bg-amber-600 hover:bg-amber-500 text-white rounded-lg shadow flex items-center transition">
-                        <i class="fa-solid fa-file-zipper mr-1"></i> 打包下載 ZIP
+                        <i class="fa-solid fa-file-zipper mr-1"></i> 打包 ZIP
                     </button>
                     <button type="button" onclick="exportToExcel()" class="px-2.5 py-1.5 text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg shadow flex items-center transition">
                         <i class="fa-solid fa-file-excel mr-1"></i> Excel
@@ -89,15 +89,21 @@
             </div>
 
             <!-- 功能按鈕組 -->
-            <div class="flex items-center space-x-1.5 pt-1 border-t border-slate-800">
-                <button type="button" onclick="openInspectorSettingsModal()" class="flex-1 sm:flex-none px-3 py-1.5 text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 flex items-center justify-center transition">
+            <div class="flex items-center space-x-1.5 pt-1 border-t border-slate-800 flex-wrap gap-1">
+                <button type="button" onclick="openInspectorSettingsModal()" class="px-3 py-1.5 text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 flex items-center transition">
                     <i class="fa-solid fa-users-gear mr-1 text-amber-400"></i> 設定人員
                 </button>
-                <button type="button" onclick="openFolderViewerModal()" class="flex-1 sm:flex-none px-3 py-1.5 text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 flex items-center justify-center transition">
+                <button type="button" onclick="openFolderViewerModal()" class="px-3 py-1.5 text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 flex items-center transition">
                     <i class="fa-solid fa-folder-tree mr-1 text-indigo-400"></i> 相冊
                 </button>
-                <button type="button" onclick="triggerPrint()" class="flex-1 sm:flex-none px-3 py-1.5 text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg shadow flex items-center justify-center transition">
+                <button type="button" onclick="openPasswordSettingsModal()" class="px-3 py-1.5 text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 flex items-center transition">
+                    <i class="fa-solid fa-key mr-1 text-yellow-400"></i> 密碼設定
+                </button>
+                <button type="button" onclick="triggerPrint()" class="px-3 py-1.5 text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg shadow flex items-center transition">
                     <i class="fa-solid fa-print mr-1"></i> 列印 A4
+                </button>
+                <button type="button" onclick="promptClearAllData()" class="px-3 py-1.5 text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white rounded-lg shadow flex items-center transition ml-auto">
+                    <i class="fa-solid fa-triangle-exclamation mr-1"></i> 清除所有狀態
                 </button>
             </div>
         </div>
@@ -112,19 +118,21 @@
                 
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 flex-1">
                     <div>
-                        <label class="block text-xs font-semibold text-slate-500 mb-1">專案 / 主題名稱</label>
-                        <input type="text" id="projectTheme" value="2026Q4_深度清潔檢查" onchange="saveProjectSettings()" 
+                        <label class="block text-xs font-semibold text-slate-500 mb-1">
+                            專案 / 主題名稱 <span class="text-[10px] text-rose-500 font-normal">(需密碼更改)</span>
+                        </label>
+                        <input type="text" id="projectTheme" value="2026Q4_深度清潔檢查" onfocus="requestThemeChangePermission(this)" 
                             class="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-400 focus:outline-none font-medium text-slate-700">
                     </div>
                     <div>
                         <label class="block text-xs font-semibold text-slate-500 mb-1">預設檢查人員</label>
-                        <select id="inspectorSelect" onchange="saveProjectSettings()"
+                        <select id="inspectorSelect" onchange="saveProjectSettingsOnly()"
                             class="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-400 focus:outline-none font-medium text-slate-700">
                         </select>
                     </div>
                     <div>
                         <label class="block text-xs font-semibold text-slate-500 mb-1">檢查基準日期</label>
-                        <input type="date" id="inspectionDate" onchange="saveProjectSettings()"
+                        <input type="date" id="inspectionDate" onchange="saveProjectSettingsOnly()"
                             class="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-400 focus:outline-none font-medium text-slate-700">
                     </div>
                 </div>
@@ -184,7 +192,7 @@
             </div>
         </div>
 
-        <!-- 直向 A4 列印專用區域 Print Layout -->
+        <!-- 列印專用區域 -->
         <div id="printArea" class="hidden print:block p-1 bg-white text-black font-sans">
             <div class="border border-black p-2">
                 <div class="flex justify-between items-start mb-1 border-b border-black pb-1">
@@ -222,6 +230,51 @@
             </div>
         </div>
 
+    </div>
+
+    <!-- 密碼驗證彈窗通用 Modal -->
+    <div id="passwordModal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4 no-print">
+        <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-sm overflow-hidden flex flex-col p-5 space-y-4">
+            <div class="text-center space-y-1">
+                <div class="w-12 h-12 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto text-xl shadow-inner">
+                    <i class="fa-solid fa-lock"></i>
+                </div>
+                <h3 class="font-bold text-base text-slate-900" id="passwordModalTitle">請輸入安全密碼</h3>
+                <p class="text-xs text-slate-500" id="passwordModalDesc">此操作需要權限驗證</p>
+            </div>
+            <div>
+                <input type="password" id="authPasswordInput" placeholder="請輸入密碼（預設: 8888）" 
+                    class="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-400 focus:outline-none text-center font-mono">
+            </div>
+            <div class="flex space-x-2">
+                <button type="button" onclick="closePasswordModal()" class="flex-1 py-2 text-xs font-bold bg-slate-200 text-slate-700 rounded-xl hover:bg-slate-300">取消</button>
+                <button type="button" onclick="verifyPasswordAction()" class="flex-1 py-2 text-xs font-extrabold bg-brand-500 text-slate-950 rounded-xl shadow">確認</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 密碼更改設定 Modal -->
+    <div id="passwordSettingsModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4 no-print">
+        <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md overflow-hidden flex flex-col">
+            <div class="bg-slate-900 text-white px-5 py-4 flex items-center justify-between">
+                <h3 class="font-bold text-base flex items-center"><i class="fa-solid fa-key text-yellow-400 mr-2"></i> 設定操作密碼</h3>
+                <button type="button" onclick="closePasswordSettingsModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="p-5 space-y-3 text-xs">
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">更改專案名稱密碼:</label>
+                    <input type="text" id="passThemeInput" placeholder="預設: 8888" class="w-full px-3 py-2 bg-slate-50 border rounded-lg font-mono">
+                </div>
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">清除所有狀態密碼:</label>
+                    <input type="text" id="passClearInput" placeholder="預設: 8888" class="w-full px-3 py-2 bg-slate-50 border rounded-lg font-mono">
+                </div>
+            </div>
+            <div class="bg-slate-100 px-5 py-3 border-t flex justify-between">
+                <button type="button" onclick="closePasswordSettingsModal()" class="px-3 py-1.5 font-bold bg-slate-200 rounded-lg">取消</button>
+                <button type="button" onclick="savePasswordSettings()" class="px-4 py-1.5 font-bold bg-brand-500 text-slate-950 rounded-lg shadow">儲存密碼設定</button>
+            </div>
+        </div>
     </div>
 
     <!-- 房間檢查彈窗 Room Inspection Modal -->
@@ -271,7 +324,7 @@
                         class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:outline-none"></textarea>
                 </div>
 
-                <!-- 現場拍照與照片上傳區 -->
+                <!-- 現場拍照區 -->
                 <div class="border-t border-slate-200 pt-3">
                     <h4 class="font-bold text-slate-800 text-xs flex items-center mb-2">
                         <i class="fa-solid fa-camera text-indigo-500 mr-1.5"></i> 現場相片記錄
@@ -351,6 +404,8 @@
 
         let roomDataStore = {};
         let currentEditingRoom = null;
+        let pendingThemeValue = "";
+        let currentActionType = ""; // 'CLEAR_ALL' 或 'CHANGE_THEME'
 
         const defaultInspectors = [
             "陳大文 Alex (房務主管)", "李小明 David (資深督導)", "張美儀 Mary (主管)",
@@ -363,7 +418,9 @@
             theme: '2026Q4_深度清潔檢查',
             inspector: '陳大文 Alex (房務主管)',
             date: new Date().toISOString().split('T')[0],
-            inspectorsList: [...defaultInspectors]
+            inspectorsList: [...defaultInspectors],
+            passTheme: '8888',
+            passClear: '8888'
         };
 
         window.onload = function() {
@@ -378,8 +435,92 @@
             populateInspectorSelect();
         }
 
-        function saveProjectSettings() {
-            projectConfig.theme = document.getElementById('projectTheme').value.trim() || 'General_Inspection';
+        // 專案名稱點擊防護
+        function requestThemeChangePermission(inputEl) {
+            inputEl.blur(); // 先讓輸入框失去焦點
+            currentActionType = 'CHANGE_THEME';
+            pendingThemeValue = document.getElementById('projectTheme').value;
+            
+            document.getElementById('passwordModalTitle').textContent = "更改專案名稱授權";
+            document.getElementById('passwordModalDesc').textContent = "請輸入更改專案名稱的管理密碼";
+            document.getElementById('authPasswordInput').value = "";
+            document.getElementById('passwordModal').classList.remove('hidden');
+            document.getElementById('authPasswordInput').focus();
+        }
+
+        function verifyPasswordAction() {
+            const inputPass = document.getElementById('authPasswordInput').value;
+            
+            if (currentActionType === 'CHANGE_THEME') {
+                const correctPass = projectConfig.passTheme || '8888';
+                if (inputPass === correctPass) {
+                    closePasswordModal();
+                    const newTheme = prompt("請輸入新的專案/主題名稱:", projectConfig.theme);
+                    if (newTheme !== null && newTheme.trim() !== "") {
+                        projectConfig.theme = newTheme.trim();
+                        document.getElementById('projectTheme').value = projectConfig.theme;
+                        saveToCloud();
+                        showToast("✅ 專案名稱已更新");
+                    }
+                } else {
+                    alert('❌ 密碼錯誤，無法更改專案名稱！');
+                }
+            } else if (currentActionType === 'CLEAR_ALL') {
+                const correctPass = projectConfig.passClear || '8888';
+                if (inputPass === correctPass) {
+                    closePasswordModal();
+                    executeClearAllData();
+                } else {
+                    alert('❌ 密碼錯誤，無法清除資料！');
+                }
+            }
+        }
+
+        function closePasswordModal() {
+            document.getElementById('passwordModal').classList.add('hidden');
+            currentActionType = "";
+        }
+
+        function promptClearAllData() {
+            currentActionType = 'CLEAR_ALL';
+            document.getElementById('passwordModalTitle').textContent = "清除所有狀態授權";
+            document.getElementById('passwordModalDesc').textContent = "警告：此操作將清空所有房間狀態與相片！";
+            document.getElementById('authPasswordInput').value = "";
+            document.getElementById('passwordModal').classList.remove('hidden');
+            document.getElementById('authPasswordInput').focus();
+        }
+
+        async function executeClearAllData() {
+            roomDataStore = {};
+            await saveToCloud();
+            showToast("🗑️ 已成功清除雲端所有房間狀態！");
+        }
+
+        function openPasswordSettingsModal() {
+            document.getElementById('passThemeInput').value = projectConfig.passTheme || '8888';
+            document.getElementById('passClearInput').value = projectConfig.passClear || '8888';
+            document.getElementById('passwordSettingsModal').classList.remove('hidden');
+        }
+
+        function closePasswordSettingsModal() {
+            document.getElementById('passwordSettingsModal').classList.add('hidden');
+        }
+
+        function savePasswordSettings() {
+            const p1 = document.getElementById('passThemeInput').value.trim();
+            const p2 = document.getElementById('passClearInput').value.trim();
+            if (!p1 || !p2) {
+                alert('密碼不能為空！');
+                return;
+            }
+            projectConfig.passTheme = p1;
+            projectConfig.passClear = p2;
+            saveToCloud();
+            closePasswordSettingsModal();
+            showToast("🔐 操作密碼已成功更新！");
+        }
+
+        function saveProjectSettingsOnly() {
             projectConfig.inspector = document.getElementById('inspectorSelect').value;
             projectConfig.date = document.getElementById('inspectionDate').value || new Date().toISOString().split('T')[0];
             saveToCloud();
@@ -572,8 +713,6 @@
 
             document.getElementById('modalRoomBadge').textContent = roomNo;
             document.getElementById('modalNotes').value = data.notes || '';
-            
-            // 固定帶入選擇的人員
             document.getElementById('modalInspectorSelect').value = data.inspector || projectConfig.inspector;
 
             updateModalStatusButtons(tempModalState.overallStatus);
@@ -760,7 +899,6 @@
 
         function closeFolderModal() { document.getElementById('folderModal').classList.add('hidden'); }
 
-        // 打包電腦端下載：專案名稱資料夾/房間號碼資料夾/照片及說明
         async function downloadProjectZip() {
             const zip = new JSZip();
             const projectFolderName = projectConfig.theme.replace(/[\/\\:*?"<>|]/g, '_') || 'Housekeeping_Project';
@@ -772,12 +910,9 @@
                 const room = roomDataStore[roomNo];
                 if (room.overallStatus !== 'PENDING' || (room.photos && room.photos.length > 0) || room.notes) {
                     const roomFolder = projectFolder.folder(`Room_${roomNo}`);
-                    
-                    // 寫入房間文字報告
                     const reportText = `房間號碼: ${roomNo}\n檢查狀態: ${room.overallStatus}\n檢查人員: ${room.inspector || '未指定'}\n檢查日期: ${room.date || ''}\n備註說明: ${room.notes || '無'}\n`;
                     roomFolder.file("Inspection_Notes.txt", reportText);
 
-                    // 寫入房間照片
                     if (room.photos && room.photos.length > 0) {
                         room.photos.forEach((p, idx) => {
                             if (p.dataUrl && p.dataUrl.includes('base64,')) {
@@ -829,7 +964,6 @@
             showToast("Excel (.xlsx) 報表匯出成功！");
         }
 
-        // 修正列印功能，確保數據正確渲染進列印 DOM
         function triggerPrint() {
             document.getElementById('printDate').textContent = projectConfig.date;
             document.getElementById('printInspector').textContent = projectConfig.inspector;
